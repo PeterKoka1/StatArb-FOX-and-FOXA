@@ -86,17 +86,41 @@ def single_df():
                 main_df = main_df.merge(df)
 
     main_df.to_csv('SP500JC.csv')
-    
+
 def currency_data():
     fred = Fred(api_key='cf154315e654c009c1b944f20dd1e028')
 
     USEUROforex = fred.get_series('DEXUSEU')
-    USEUROforex = pd.DataFrame(USEUROforex)
+    USEUROforex = pd.DataFrame(USEUROforex).iloc[2321:]
+    USEUROforex.columns = ['USvsEURO']
 
-    JC = pd.read_csv('SP500JC.csv')
+    USEUROforex.fillna(
+        method='bfill',
+        inplace=True
+    )
+
+    JC = pd.read_csv('SP500JC.csv').iloc[:1478]
+
+    exchange_indices = [str(ix)[0:10] for ix in USEUROforex.index.values]
+    JC_indices = [ix[0:10] for ix in JC['Periods']]
+
+    labs = []
+    for i in exchange_indices:
+        if i not in JC_indices:
+            labs.append(i)
+
+    USEUROforex.reset_index(inplace=True)
+    USEUROforex_dict = {'USvsEURO':[]}
+    for i, ix in enumerate(USEUROforex['index']):
+        if str(ix)[0:10] in labs:
+            pass
+        else:
+            USEUROforex_dict['USvsEURO'].append(USEUROforex['USvsEURO'][i])
+
+    USEUROforex = pd.DataFrame.from_dict(USEUROforex_dict)
+
     JC = JC.join(USEUROforex)
     JC.drop('Unnamed: 0', axis=1, inplace=True)
-
     JC.to_csv('Indicators_Joined.csv')
 
 update_ticks()
