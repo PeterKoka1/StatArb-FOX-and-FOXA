@@ -97,7 +97,7 @@ def currency_data():
     JC = JC.join(USEUROforex)
     JC.drop('Unnamed: 0', axis=1, inplace=True)
 
-    JC.to_csv('Indicators_Joined')
+    JC.to_csv('Indicators_Joined.csv')
 
 update_ticks()
 goog_pull(request_again=False)
