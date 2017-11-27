@@ -41,7 +41,7 @@ def goog_pull(request_again):
     interval = "86400"
 
     for stock in tickers:
-        if not exists('SP500/{}'.format(stock)):
+        if not exists('SP500/{}.csv'.format(stock)):
             try:
                 param = [
                     {
@@ -62,30 +62,59 @@ def goog_pull(request_again):
             except:
                 print("Unable to read URL for: {}".format(stock))
 
+    params = [
+        {
+            'q': 'XLF',
+            'x': 'NYSEARCA',
+        },
+        {
+            'q': '.INX',
+            'x': 'INDEXSP'
+        }
+    ]
+
+    comparables = get_prices_time_data(params, period="10Y", interval="86400")
+
+    index = ['XLF', '.INX']
+    for name in index:
+        comparables.drop(labels=[
+            "{}_Open".format(name),
+            "{}_High".format(name),
+            "{}_Low".format(name),
+        ],
+            axis=1, inplace=True
+        )
+
+    comparables.to_csv('stock_dfs/comps.csv')
+
 def single_df():
 
     with open('SP500quotes.pickle', 'rb') as f:
         tickers = pickle.load(f)
 
+    # tickers.append('comps')
     main_df = pd.DataFrame()
 
     for stock in tickers:
-        df = pd.read_csv('stock_dfs/{}.csv'.format(stock))
+        try:
 
-        # df.reset_index(inplace=True)
-        df.rename(columns={'Unnamed: 0':'Periods'}, inplace=True)
+            df = pd.read_csv('stock_dfs/{}.csv'.format(stock))
 
-        period_start = str(df['Periods'][0])
-        period_end = str(df.tail(1)['Periods'])
+            # df.reset_index(inplace=True)
+            df.rename(columns={'Unnamed: 0':'Periods'}, inplace=True)
+            period_start = str(df['Periods'][0])
+            period_end = str(df.tail(1)['Periods'])
 
-        if '2017-11-24' in period_end and '2007-11-27' in period_start:
-            if main_df.empty:
-                main_df = df
+            if '2017-11-24' in period_end and '2007-11-27' in period_start:
+                if main_df.empty:
+                    main_df = df
 
-            else:
-                main_df = main_df.merge(df)
+                else:
+                    main_df = main_df.merge(df)
+        except:
+            pass
 
-    main_df.to_csv('SP500JC.csv')
+    main_df.to_csv('Joined_Closes.csv')
 
 def currency_data():
     fred = Fred(api_key='cf154315e654c009c1b944f20dd1e028')
@@ -99,7 +128,7 @@ def currency_data():
         inplace=True
     )
 
-    JC = pd.read_csv('SP500JC.csv').iloc[:1478]
+    JC = pd.read_csv('Joined_Closes.csv').iloc[:1478]
 
     exchange_indices = [str(ix)[0:10] for ix in USEUROforex.index.values]
     JC_indices = [ix[0:10] for ix in JC['Periods']]
@@ -121,9 +150,38 @@ def currency_data():
 
     JC = JC.join(USEUROforex)
     JC.drop('Unnamed: 0', axis=1, inplace=True)
-    JC.to_csv('Indicators_Joined.csv')
+
+    JC.to_csv('Indicators_Joined_.csv')
+
+def sectors():
+
+    params = [
+        {
+            'q': 'XLF',
+            'x': 'NYSEARCA',
+        },
+        {
+            'q': '.INX',
+            'x': 'INDEXSP'
+        }
+    ]
+
+    comparables = get_prices_time_data(params, period="10Y", interval="86400")
+
+    index = ['XLF', '.INX']
+    for name in index:
+        comparables.drop(labels=[
+            "{}_Open".format(name),
+            "{}_High".format(name),
+            "{}_Low".format(name),
+        ],
+            axis=1, inplace=True
+        )
+
+    comparables.to_csv('Sectors.csv')
 
 update_ticks()
 goog_pull(request_again=False)
 single_df()
 currency_data()
+sectors()
