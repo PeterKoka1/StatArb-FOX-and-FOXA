@@ -78,10 +78,12 @@ lm.fit <- lm(INX.first ~ XLF.first, data = data)
 summary(lm.fit)
 
 resids <- lm.fit$residuals
+acf(resids, type = "correlation", plot = TRUE)
 resids.first <- diff(resids, lag = 1, differences = 1)
 adf.resids <- adf.test(resids.first, alternative = "stationary", k = 0)
 adf.resids$statistic
 
 beta <- lm.fit$coefficients
-adf.coint <- adf.test(series$XLF.first - beta * series$INX.first, alternative = "stationary", k = 0)
-
+alpha <- 0
+adf.coint <- adf.test(series$XLF.first - alpha - beta * series$INX.first, alternative = "stationary", k = 0)
+adf.coint$statistic
