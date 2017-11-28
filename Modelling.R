@@ -22,6 +22,7 @@ for (name in names(stocks.df)) {
     }
   }  
 }
+
 high # 0.9995816
 ind # "GOOGL" "25"
 names(stocks.df)[25] # "GOOG"
@@ -29,11 +30,11 @@ names(stocks.df)[25] # "GOOG"
 pr.out <- prcomp(stocks.df, scale = TRUE, retx = TRUE)
 pr.var <- pr.out$sdev^2
 PVE <- pr.var / sum(pr.var)
-par(mfrow=c(1,2))
-plot(PVE[1:20], xlab = "Principal Component", ylab = "Proportion of Variance Explained",
-     ylim = c(0,1), col = "navyblue", type = "b", pch = 19)
-plot(cumsum(PVE[1:20]), xlab = "Principal Component", ylab = "Cumulative Proportion of Variance Explained",
-     ylim = c(0,1), col = "navyblue", type = "b", pch = 19)
+par(mfrow=c(1,1))
+barplot(PVE[1:20], xlab = "Principal Component", ylab = "Proportion of Variance Explained",
+        ylim = c(0,1), col = "navyblue")
+lines(cumsum(PVE[1:20]), xlab = "Principal Component", ylab = "Cumulative Proportion of Variance Explained",
+     ylim = c(0,1), col = "navyblue", type = "l", pch = 19)
 cumsum(PVE[1:20])[3] 
 # 3 PCs explain 84.65% of Variance
 
@@ -68,7 +69,7 @@ XLF.first <- diff(closes$XLF_Close, lag = 1, differences = 1)
 plot(XLF.first, type = "l", ylab = "Difference", xlab = "Time")
 
 par(mfrow=c(1,1))
-plot(INX.first[500:700]/20, type = "l", ylab = "Difference", xlab = "Time")
+plot(INX.first[500:700]/50, type = "l", ylab = "Difference", xlab = "Time")
 lines(XLF.first[500:700], col = "red")
 legend("topright", legend=c("Diff INX / 20", "Diff XLF"),
        col=c("black","red"), lty=c(1,1), lwd=c(3,2), seg.len = 2, cex=0.8)
@@ -87,3 +88,10 @@ beta <- lm.fit$coefficients
 alpha <- 0
 adf.coint <- adf.test(series$XLF.first - alpha - beta * series$INX.first, alternative = "stationary", k = 0)
 adf.coint$statistic
+
+#####
+par(mfrow=c(1,2))
+plot(XLF.first, INX.first)
+abline(lm.fit)
+plot(resids, type = "l")
+###
