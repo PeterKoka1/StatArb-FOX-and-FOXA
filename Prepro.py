@@ -62,31 +62,6 @@ def goog_pull(request_again):
             except:
                 print("Unable to read URL for: {}".format(stock))
 
-    params = [
-        {
-            'q': 'XLF',
-            'x': 'NYSEARCA',
-        },
-        {
-            'q': '.INX',
-            'x': 'INDEXSP'
-        }
-    ]
-
-    comparables = get_prices_time_data(params, period="10Y", interval="86400")
-
-    index = ['XLF', '.INX']
-    for name in index:
-        comparables.drop(labels=[
-            "{}_Open".format(name),
-            "{}_High".format(name),
-            "{}_Low".format(name),
-        ],
-            axis=1, inplace=True
-        )
-
-    comparables.to_csv('stock_dfs/comps.csv')
-
 def single_df():
 
     with open('SP500quotes.pickle', 'rb') as f:
