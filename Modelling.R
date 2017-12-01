@@ -32,9 +32,6 @@ ind # "GOOGL" "25"
 names(stocks.df)[25] # "GOOG"
 
 
-
-
-
 library(quantmod)
 normed.df <- stocks.df # copy of stocks.df for normalized prices
 for (i in names(stocks.df)) {
@@ -113,8 +110,8 @@ legend("topleft", legend=c("Residuals", "+/- 2 Std.Dev"),
        col=c("darkblue","darkgray"), lty=c(1,2), lwd=c(2,2), cex=0.8)
 
 resids.ACF <- acf(resids, type = "correlation", plot = TRUE, main = "Spread(%)")
-
-
+adf.resids <- adf.test(lm.total$residuals, alternative = "stationary", k = 0)
+adf.resids # DFt = -46.035
 
 
 
