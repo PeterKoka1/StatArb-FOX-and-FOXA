@@ -1,162 +1,193 @@
-import pandas as pd
-import pickle
-import bs4 as bs
-import os
-from os.path import exists
-import requests
+install.packages("dse")
+library(tseries)
+install.packages("plotrix")
+library(plotrix)
+df <- read.csv('Indicators_Joined_.csv')
+df3yr <- df[757:length(df$Periods), ]
+names(df)
+dropcols <- c('X')
+preds <- df[, !(names(df) %in% dropcols)] 
+stock.prices <- preds[, 3:dim(preds)[2]-1]
+names.ind <- seq(1, length(names(stock.prices)), 2)
+stocks.df <- stock.prices[, names.ind]
 
-from googlefinance.client import get_prices_time_data
-from fredapi import Fred
+cors <- cor(stocks.df)
+highs = rep(0, dim(cors)[1]); ind = c(NULL,NULL)
+mincorval <- 0.86; high <- 0
+for (name in names(stocks.df)) {
+  for (i in 1:dim(cors)[1]){
+    cor <- cors[i, name]
+    if ((cor > mincorval)&(cor != 1)) {
+      highs[i] = cor
+      if ((cor > high)&(cor != 1)) {
+        high <- cor
+        ind[1] <- name; ind[2] <- i
+      }
+    }
+  }  
+}
 
-def update_ticks():
-    r = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
-    soup = bs.BeautifulSoup(r.text, 'lxml')
-    SP500 = soup.find('table', {'class':'wikitable sortable'})
+high # 0.9995816
+ind # "GOOGL" "25"
+names(stocks.df)[25] # "GOOG"
 
-    tickers = []
-    for ticker in SP500.find_all('tr')[1:]:
-        stock = ticker.find_all('td')[0].text
-        tickers.append(stock)
 
-    with open('SP500quotes.pickle', 'wb') as f:
-        pickle.dump(tickers, f)
+library(quantmod)
+normed.df <- stocks.df # copy of stocks.df for normalized prices
+for (i in names(stocks.df)) {
+  eq <- stocks.df[,i]
+  normed.df[, i] <- (eq - min(eq)) / (max(eq) - min(eq))
+}
+TS <- ts(stocks.df) # time series of stocks.df
+rets <- TS / lag(TS, k = 1) - 1 # calculating daily pct change
+rets <- data.frame(rets)
 
-    return tickers
+sectors <- read.csv("Sectors.csv")[757:length(df$Periods), ]
+closes <- sectors[,c(".INX_Close","XLF_Close")]
+closes <- na.omit(closes)
 
-def goog_pull(request_again):
+normed.sec <- closes # copy of closes for normalized prices
+for (i in names(normed.sec)) {
+  eq <- normed.sec[,i]
+  normed.sec[, i] <- (eq - min(eq)) / (max(eq) - min(eq))
+}
 
-    if request_again == True:
-        tickers = update_ticks()
+sec.ts <- ts(closes)
+sec.rets <- data.frame(sec.ts / lag(sec.ts, k = 1) - 1)
+names(sec.rets) <- c("INX", "XLF")
 
-    else:
-        with open('SP500quotes.pickle', 'rb') as f:
-            tickers = pickle.load(f)
 
-    if not os.path.exists('stock_dfs'):
-        os.makedirs('stock_dfs')
-    else:
-        print('Directory Exists')
+########################
+### INX vs. XLF Plots###
+########################
+par(mfrow=c(1,2))
+plot(normed.sec$.INX_Close, xlab = "3Y", ylab = "Normalized Prices", col = "darkblue", 
+     type = "l", lwd = 1.5)
+lines(normed.sec$XLF_Close, type = "l", col = "darkgray", lwd = 1.5)
+legend("topleft", legend=c("INX", "XLF"),
+       col=c("darkblue","darkgray"), lty=c(1,1), lwd=c(1.5,1.5), cex=0.8)
+plot(normed.sec$.INX_Close - normed.sec$XLF_Close, xlab = "3Y", ylab = "Normalized Price Differences",
+     col = "darkblue", type = "l")
+# we can see that INX seems to outperform XLF
 
-    period = "10Y"
-    interval = "86400"
 
-    for stock in tickers:
-        if not exists('SP500/{}.csv'.format(stock)):
-            try:
-                param = [
-                    {
-                        'q': stock,
-                        'x': "SP",
-                    },
-                ]
-                ticker = get_prices_time_data(param, period=period, interval=interval)
-                drop_labs = [
-                    '{}_Open'.format(stock),
-                    '{}_High'.format(stock),
-                    '{}_Low'.format(stock),
-                ]
-                ticker.drop(drop_labs, axis=1, inplace=True)
-                ticker.rename(columns={'{}_Close'.format(stock):stock}, inplace=True)
-                ticker.to_csv('stock_dfs/{}.csv'.format(stock))
-                print("Adding {} to stock_dfs directory".format(stock))
-            except:
-                print("Unable to read URL for: {}".format(stock))
+lm.fit <- lm(normed.sec$.INX_Close ~ normed.sec$XLF_Close, data = normed.sec)
+beta <- lm.fit$coefficients[2]
+alpha <- lm.fit$coefficients[1]
+par(mfrow=c(1,2))
+plot(lm.fit$residuals, type = "l")
+plot(normed.sec$.INX_Close - (beta * normed.sec$XLF_Close) - alpha, type = "l")
+# although intercept term doesn't create too big of a difference in the residuals,
+# we will include it
 
-def single_df():
+# testing for autocorrelation
+par(mfrow=c(1,2))
+acf(sec.rets$INX, type = "correlation", plot = TRUE, main = "INX Returns")
+acf(sec.rets$XLF, type = "correlation", plot = TRUE, main = "XLF Returns")
 
-    with open('SP500quotes.pickle', 'rb') as f:
-        tickers = pickle.load(f)
+# rets sometimes assumed I(0), but we will not conclude
+INX.first <- diff(sec.rets$INX, lag = 1, differences = 1)
+XLF.first <- diff(sec.rets$XLF, lag = 1, differences = 1)
 
-    # tickers.append('comps')
-    main_df = pd.DataFrame()
+adf.INX <- adf.test(INX.first, alternative = "stationary", k = 0)
+adf.XLF <- adf.test(XLF.first, alternative = "stationary", k = 0)
+adf.INX # DFt = -51.033
+adf.XLF # DFt = -52.165
 
-    for stock in tickers:
-        try:
+lm.total <- lm(INX.first ~ XLF.first, data = data.frame(INX.first, XLF.first))
+resids <- lm.total$residuals # converting to pct
 
-            df = pd.read_csv('stock_dfs/{}.csv'.format(stock))
+###########################################
+### COLLECTED RESIDUALS FROM REGRESSION ###
+###########################################
+plot(resids[100:500]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
+     col = "darkblue", lwd = 2, ylim = c(-2, 2))
+model.sd <- sigma(lm.total)
+abline(a = ((1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
+abline(a = ((-1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
+legend("topleft", legend=c("Residuals", "+/- 1.5 Std.Dev"),
+       col=c("darkblue","darkgray"), lty=c(1,2), lwd=c(2,2), cex=0.8)
 
-            # df.reset_index(inplace=True)
-            df.rename(columns={'Unnamed: 0':'Periods'}, inplace=True)
-            period_start = str(df['Periods'][0])
-            period_end = str(df.tail(1)['Periods'])
+resids.ACF <- acf(resids, type = "correlation", plot = TRUE, main = "Spread(%)")
+adf.resids <- adf.test(lm.total$residuals, alternative = "stationary", k = 0)
+adf.resids # DFt = -46.035
 
-            if '2017-11-24' in period_end and '2007-11-27' in period_start:
-                if main_df.empty:
-                    main_df = df
+mu <- mean(resids)
+sigma <- sd(resids)
+trade.sig <- (resids - mu) / sigma
+alpha <- lm.total$coefficients[1]
+beta <- lm.total$coefficients[2]
+# INX - beta * XLF - alpha
 
-                else:
-                    main_df = main_df.merge(df)
-        except:
-            pass
+####################################
+### DISTRIBUTION OF SPREAD GRAPH ###
+####################################
+hist(trade.sig, breaks=100, col="darkblue", main = "Distribution of Spread", xlab = "Std.Dev") 
 
-    main_df.to_csv('Joined_Closes.csv')
+sectors$.INX_Close # X1
+sectors$XLF_Close # Y1
 
-def currency_data():
-    fred = Fred(api_key='cf154315e654c009c1b944f20dd1e028')
+plot(resids[100:150]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
+     col = "darkblue", lwd = 2, ylim = c(-2, 2))
 
-    USEUROforex = fred.get_series('DEXUSEU')
-    USEUROforex = pd.DataFrame(USEUROforex).iloc[2321:]
-    USEUROforex.columns = ['USvsEURO']
 
-    USEUROforex.fillna(
-        method='bfill',
-        inplace=True
-    )
+bINX <- 0
+bXLF <- 0
+money <- 1000
+pos <-c()
+ix <- 0
+trade.sig
+for (z.score in trade.sig) {
+  ix <- ix + 1
+  b<-0
+  pos<-c(pos,b)
+  if (z.score > 2){ # test several trade.sig's
+    bINX<-bINX + 1
+    shares <- 1
+    pos[ix] = 1
+    # create function for all of that
+  }
+  if (z.score < 2) {
+    bXLF = bXLF + 1
+    pos[ix] = 2
+  }
+}
+trade.sig
 
-    JC = pd.read_csv('Joined_Closes.csv').iloc[:1478]
+pos
 
-    exchange_indices = [str(ix)[0:10] for ix in USEUROforex.index.values]
-    JC_indices = [ix[0:10] for ix in JC['Periods']]
+pos
+warnings()
 
-    labs = []
-    for i in exchange_indices:
-        if i not in JC_indices:
-            labs.append(i)
+beta
 
-    USEUROforex.reset_index(inplace=True)
-    USEUROforex_dict = {'USvsEURO':[]}
-    for i, ix in enumerate(USEUROforex['index']):
-        if str(ix)[0:10] in labs:
-            pass
-        else:
-            USEUROforex_dict['USvsEURO'].append(USEUROforex['USvsEURO'][i])
 
-    USEUROforex = pd.DataFrame.from_dict(USEUROforex_dict)
+lm.total
 
-    JC = JC.join(USEUROforex)
-    JC.drop('Unnamed: 0', axis=1, inplace=True)
+pr.out <- prcomp(stocks.df, scale = TRUE, retx = TRUE)
+pr.var <- pr.out$sdev^2
+PVE <- pr.var / sum(pr.var)
+par(mfrow=c(1,1))
+barplot(PVE[1:20], xlab = "Principal Component", ylab = "Proportion of Variance Explained",
+        ylim = c(0,1), col = "navyblue")
+lines(cumsum(PVE[1:20]), xlab = "Principal Component", ylab = "Cumulative Proportion of Variance Explained",
+     ylim = c(0,1), col = "navyblue", type = "l", pch = 19)
+cumsum(PVE[1:20])[3] 
+# 3 PCs explain 84.65% of Variance
 
-    JC.to_csv('Indicators_Joined_.csv')
+principal.comps <- pr.out$x[,1:3]
+upd.pred <- cbind(principal.comps, df["USvsEURO"])
 
-def sectors():
-
-    params = [
-        {
-            'q': 'XLF',
-            'x': 'NYSEARCA',
-        },
-        {
-            'q': '.INX',
-            'x': 'INDEXSP'
-        }
-    ]
-
-    comparables = get_prices_time_data(params, period="10Y", interval="86400")
-
-    index = ['XLF', '.INX']
-    for name in index:
-        comparables.drop(labels=[
-            "{}_Open".format(name),
-            "{}_High".format(name),
-            "{}_Low".format(name),
-        ],
-            axis=1, inplace=True
-        )
-
-    comparables.to_csv('Sectors.csv')
-
-update_ticks()
-goog_pull(request_again=False)
-single_df()
-currency_data()
-sectors()
+Cols <- function(vec) {
+  cols <- rainbow(length(unique(vec)))
+  return(cols[as.numeric(as.factor(vec))])
+}
+stocks.labs <- names(stocks.df)
+par(mfrow = c(1,3))
+plot(c(upd.pred$PC1,upd.pred$PC3), col = Cols(stocks.labs), pch=19,
+     xlab = "Z1", ylab = "Z3")
+plot(c(upd.pred$PC2,upd.pred$PC3), col = Cols(stocks.labs), pch = 19,
+     xlab = "Z2", ylab = "Z3")
+plot(c(upd.pred$PC1,upd.pred$PC2), col = Cols(stocks.labs), pch = 19,
+     xlab = "Z1", ylab = "Z2")
+# explain over 85% of variance with 3 principal components
