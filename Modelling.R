@@ -95,26 +95,48 @@ adf.INX # DFt = -51.033
 adf.XLF # DFt = -52.165
 
 lm.total <- lm(INX.first ~ XLF.first, data = data.frame(INX.first, XLF.first))
-resids <- lm.total$residuals * 100 # converting to pct
+resids <- lm.total$residuals # converting to pct
 
 ###########################################
 ### COLLECTED RESIDUALS FROM REGRESSION ###
 ###########################################
-par(mfrow=c(1,1))
-plot(resids[200:250], type = "l", xlab = "50 Indexed Days", ylab = "% Spread",
+plot(resids[100:500]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
      col = "darkblue", lwd = 2, ylim = c(-2, 2))
 model.sd <- sigma(lm.total)
-abline(a = ((2 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
-abline(a = ((-2 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
-legend("topleft", legend=c("Residuals", "+/- 2 Std.Dev"),
+abline(a = ((1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
+abline(a = ((-1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
+legend("topleft", legend=c("Residuals", "+/- 1.5 Std.Dev"),
        col=c("darkblue","darkgray"), lty=c(1,2), lwd=c(2,2), cex=0.8)
 
 resids.ACF <- acf(resids, type = "correlation", plot = TRUE, main = "Spread(%)")
 adf.resids <- adf.test(lm.total$residuals, alternative = "stationary", k = 0)
 adf.resids # DFt = -46.035
 
+mu <- mean(resids)
+sigma <- sd(resids)
+trade.sig <- (resids - mu) / sigma
+alpha <- lm.total$coefficients[1]
+beta <- lm.total$coefficients[2]
+# INX - beta * XLF - alpha
 
+####################################
+### DISTRIBUTION OF SPREAD GRAPH ###
+####################################
+hist(trade.sig, breaks=100, col="darkblue", main = "", xlab = "Std.Dev") 
 
+sectors$.INX_Close # X1
+sectors$XLF_Close # Y1
+
+plot(resids[100:150]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
+     col = "darkblue", lwd = 2, ylim = c(-2, 2))
+abline(a = ((1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
+abline(a = ((-1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
+legend("topleft", legend=c("Residuals", "+/- 1.5 Std.Dev"),
+       col=c("darkblue","darkgray"), lty=c(1,2), lwd=c(2,2), cex=0.8)
+
+trade.sig
+
+### first do PCE, then convert to returns??
 pr.out <- prcomp(stocks.df, scale = TRUE, retx = TRUE)
 pr.var <- pr.out$sdev^2
 PVE <- pr.var / sum(pr.var)
