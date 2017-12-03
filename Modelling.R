@@ -147,16 +147,65 @@ write.csv(output, "signals.csv")
 
 par(mfrow=c(1,2))
 plot(output$trade.sig[1:5], type = "l")
-plot(INX.first[1:5], type = "l", col = "darkblue")
+plot(INX.first[1:5], type = "l", col = "darkblue", ylim = c(-0.03, 0.02))
 lines(XLF.first[1:5], type = "l", col = "darkgray")
+abline(a = 0, b = 0, col = "red", lwd = 2, lty = 2)
 resids[1]
 output$trade.sig[1]
 output$trade.sig[2]
 output$trade.sig[3]
 
 
-
+### KEEP IN MIND THIS IS ENTIRE DF
 ### first do PCE, then convert to returns??
+###: try for standardized, then regular PCA
+normed.df[1:5,1]
+names(normed.df)
+pr.out <- prcomp(normed.df, scale = TRUE, retx = TRUE)
+pr.var <- pr.out$sdev^2
+PVE <- pr.var / sum(pr.var)
+par(mfrow=c(1,1))
+barplot(PVE[1:12], xlab = "Principal Component", ylab = "Proportion of Variance Explained",
+        col = "navyblue", ylim = c(0,1)) # first 20 PC
+lines(cumsum(PVE[1:12]), col = "darkgray", type = "l", lwd = 2)
+install.packages("Hmisc");library(Hmisc)
+#minor.tick(ny=1, tick.ratio=1)
+cumsum(PVE)
+
+for (tick in names(normed.df)) {
+  tickr.first <- diff(normed.df[,tick], lag = 1, differences = 1)
+  options(warn = -1)
+  adf.tickr <- adf.test(tickr.first, alternative = "stationary", k = 0)
+  p.vals[count] <- adf.tickr$statistic
+  count <- count + 1
+}
+
+failed <- rep(NA, length(names(normed.df)))
+for (i in 1:length(p.vals)) {
+  if (p.vals[i] > -20) {
+    failed[i] <- names(normed.df)[i]
+  }
+}
+na.omit(failed)
+
+principal.comps <- pr.out$x[,1:3]
+Cols <- function(vec) {
+  cols <- rainbow(length(unique(vec)))
+  return(cols[as.numeric(as.factor(vec))])
+}
+stocks.labs <- names(normed.df)
+par(mfrow = c(1,3))
+plot(c(principal.comps[,1],principal.comps[,3]), col = Cols(stocks.labs), pch=19,
+     xlab = "Z1", ylab = "Z3")
+plot(c(principal.comps[,2],principal.comps[,3]), col = Cols(stocks.labs), pch = 19,
+     xlab = "Z2", ylab = "Z3")
+plot(c(principal.comps[,1],principal.comps[,2]), col = Cols(stocks.labs), pch = 19,
+     xlab = "Z1", ylab = "Z2")
+# explain over 85% of variance with 3 principal components
+
+
+
+
 pr.out <- prcomp(stocks.df, scale = TRUE, retx = TRUE)
 pr.var <- pr.out$sdev^2
 PVE <- pr.var / sum(pr.var)
