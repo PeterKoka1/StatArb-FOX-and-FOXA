@@ -47,14 +47,16 @@ closes <- sectors[,c(".INX_Close","XLF_Close")]
 closes <- na.omit(closes)
 
 normed.sec <- closes # copy of closes for normalized prices
-for (i in names(normed.sec)) {
+for (i in c('.INX_Close','XLF_Close')) {
   eq <- normed.sec[,i]
   normed.sec[, i] <- (eq - min(eq)) / (max(eq) - min(eq))
 }
 
+normed.sec
 sec.ts <- ts(closes)
-sec.rets <- data.frame(sec.ts / lag(sec.ts, k = 1) - 1)
+sec.rets <- data.frame(sec.ts / lag(sec.ts, k = 1) - 1) # lose first data point
 names(sec.rets) <- c("INX", "XLF")
+length(normed.sec$XLF_Close)
 
 
 ########################
@@ -88,6 +90,8 @@ acf(sec.rets$XLF, type = "correlation", plot = TRUE, main = "XLF Returns")
 # rets sometimes assumed I(0), but we will not conclude
 INX.first <- diff(sec.rets$INX, lag = 1, differences = 1)
 XLF.first <- diff(sec.rets$XLF, lag = 1, differences = 1)
+
+length(XLF.first)
 
 adf.INX <- adf.test(INX.first, alternative = "stationary", k = 0)
 adf.XLF <- adf.test(XLF.first, alternative = "stationary", k = 0)
@@ -134,7 +138,23 @@ abline(a = ((-1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
 legend("topleft", legend=c("Residuals", "+/- 1.5 Std.Dev"),
        col=c("darkblue","darkgray"), lty=c(1,2), lwd=c(2,2), cex=0.8)
 
-trade.sig
+add.df <- data.frame(sectors$.INX_Close, sectors$XLF_Close)
+add.df <- add.df[4:dim(add.df)[1], ] # get rid of missing data from differencing
+names(add.df) <- c('INX','XLF')
+output <- data.frame(trade.sig, add.df)
+output[1:5,]
+write.csv(output, "signals.csv")
+
+par(mfrow=c(1,2))
+plot(output$trade.sig[1:5], type = "l")
+plot(INX.first[1:5], type = "l", col = "darkblue")
+lines(XLF.first[1:5], type = "l", col = "darkgray")
+resids[1]
+output$trade.sig[1]
+output$trade.sig[2]
+output$trade.sig[3]
+
+
 
 ### first do PCE, then convert to returns??
 pr.out <- prcomp(stocks.df, scale = TRUE, retx = TRUE)
@@ -164,3 +184,8 @@ plot(c(upd.pred$PC2,upd.pred$PC3), col = Cols(stocks.labs), pch = 19,
 plot(c(upd.pred$PC1,upd.pred$PC2), col = Cols(stocks.labs), pch = 19,
      xlab = "Z1", ylab = "Z2")
 # explain over 85% of variance with 3 principal components
+
+
+
+## create a line chart with 2sd matlines accross the entire time period with 
+## ROLLING sd and mean. (investopedia link)
