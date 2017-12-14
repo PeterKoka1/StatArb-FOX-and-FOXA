@@ -1,193 +1,230 @@
-install.packages("dse")
-library(tseries)
-install.packages("plotrix")
-library(plotrix)
-df <- read.csv('Indicators_Joined_.csv')
-df3yr <- df[757:length(df$Periods), ]
-names(df)
-dropcols <- c('X')
-preds <- df[, !(names(df) %in% dropcols)] 
-stock.prices <- preds[, 3:dim(preds)[2]-1]
-names.ind <- seq(1, length(names(stock.prices)), 2)
-stocks.df <- stock.prices[, names.ind]
+import pickle
+import bs4 as bs
+import os
+from os.path import exists
+import requests
 
-cors <- cor(stocks.df)
-highs = rep(0, dim(cors)[1]); ind = c(NULL,NULL)
-mincorval <- 0.86; high <- 0
-for (name in names(stocks.df)) {
-  for (i in 1:dim(cors)[1]){
-    cor <- cors[i, name]
-    if ((cor > mincorval)&(cor != 1)) {
-      highs[i] = cor
-      if ((cor > high)&(cor != 1)) {
-        high <- cor
-        ind[1] <- name; ind[2] <- i
-      }
-    }
-  }  
-}
+from googlefinance.client import get_prices_time_data
+import quandl
+from alpha_vantage.timeseries import TimeSeries
+from fredapi import Fred
 
-high # 0.9995816
-ind # "GOOGL" "25"
-names(stocks.df)[25] # "GOOG"
+def update_ticks():
+    r = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+    soup = bs.BeautifulSoup(r.text, 'lxml')
+    SP500 = soup.find('table', {'class':'wikitable sortable'})
 
+    tickers = []
+    for ticker in SP500.find_all('tr')[1:]:
+        stock = ticker.find_all('td')[0].text
+        tickers.append(stock)
 
-library(quantmod)
-normed.df <- stocks.df # copy of stocks.df for normalized prices
-for (i in names(stocks.df)) {
-  eq <- stocks.df[,i]
-  normed.df[, i] <- (eq - min(eq)) / (max(eq) - min(eq))
-}
-TS <- ts(stocks.df) # time series of stocks.df
-rets <- TS / lag(TS, k = 1) - 1 # calculating daily pct change
-rets <- data.frame(rets)
+    with open('SP500quotes.pickle', 'wb') as f:
+        pickle.dump(tickers, f)
 
-sectors <- read.csv("Sectors.csv")[757:length(df$Periods), ]
-closes <- sectors[,c(".INX_Close","XLF_Close")]
-closes <- na.omit(closes)
+    return tickers
 
-normed.sec <- closes # copy of closes for normalized prices
-for (i in names(normed.sec)) {
-  eq <- normed.sec[,i]
-  normed.sec[, i] <- (eq - min(eq)) / (max(eq) - min(eq))
-}
+###: googlefinance.client having issues with pulling historicals
+def goog_pull(request_again):
 
-sec.ts <- ts(closes)
-sec.rets <- data.frame(sec.ts / lag(sec.ts, k = 1) - 1)
-names(sec.rets) <- c("INX", "XLF")
+    if request_again == True:
+        tickers = update_ticks()
 
+    else:
+        with open('SP500quotes.pickle', 'rb') as f:
+            tickers = pickle.load(f)
 
-########################
-### INX vs. XLF Plots###
-########################
-par(mfrow=c(1,2))
-plot(normed.sec$.INX_Close, xlab = "3Y", ylab = "Normalized Prices", col = "darkblue", 
-     type = "l", lwd = 1.5)
-lines(normed.sec$XLF_Close, type = "l", col = "darkgray", lwd = 1.5)
-legend("topleft", legend=c("INX", "XLF"),
-       col=c("darkblue","darkgray"), lty=c(1,1), lwd=c(1.5,1.5), cex=0.8)
-plot(normed.sec$.INX_Close - normed.sec$XLF_Close, xlab = "3Y", ylab = "Normalized Price Differences",
-     col = "darkblue", type = "l")
-# we can see that INX seems to outperform XLF
+    if not os.path.exists('stock_dfs'):
+        os.makedirs('stock_dfs')
+    else:
+        print('Directory Exists')
 
+    period = "5Y"
+    interval = "86400"
 
-lm.fit <- lm(normed.sec$.INX_Close ~ normed.sec$XLF_Close, data = normed.sec)
-beta <- lm.fit$coefficients[2]
-alpha <- lm.fit$coefficients[1]
-par(mfrow=c(1,2))
-plot(lm.fit$residuals, type = "l")
-plot(normed.sec$.INX_Close - (beta * normed.sec$XLF_Close) - alpha, type = "l")
-# although intercept term doesn't create too big of a difference in the residuals,
-# we will include it
+    for stock in tickers:
+        if not exists('SP500/{}.csv'.format(stock)):
+            try:
+                param = [
+                    {
+                        'q': stock,
+                        'x': "INDEXSP",
+                    },
+                ]
+                ticker = get_prices_time_data(param, period=period, interval=interval)
+                drop_labs = [
+                    '{}_Open'.format(stock),
+                    '{}_High'.format(stock),
+                    '{}_Low'.format(stock),
+                ]
+                ticker.drop(drop_labs, axis=1, inplace=True)
+                ticker.rename(columns={'{}_Close'.format(stock):stock}, inplace=True)
+                ticker.to_csv('stock_dfs/{}.csv'.format(stock))
+                print("Adding {} to stock_dfs directory".format(stock))
+            except:
+                print("Unable to read URL for: {}".format(stock))
 
-# testing for autocorrelation
-par(mfrow=c(1,2))
-acf(sec.rets$INX, type = "correlation", plot = TRUE, main = "INX Returns")
-acf(sec.rets$XLF, type = "correlation", plot = TRUE, main = "XLF Returns")
+def alpha_vantage_pull(request_again):
+    if request_again == True:
+        tickers = update_ticks()
 
-# rets sometimes assumed I(0), but we will not conclude
-INX.first <- diff(sec.rets$INX, lag = 1, differences = 1)
-XLF.first <- diff(sec.rets$XLF, lag = 1, differences = 1)
+    else:
+        with open('SP500quotes.pickle', 'rb') as f:
+            tickers = pickle.load(f)
 
-adf.INX <- adf.test(INX.first, alternative = "stationary", k = 0)
-adf.XLF <- adf.test(XLF.first, alternative = "stationary", k = 0)
-adf.INX # DFt = -51.033
-adf.XLF # DFt = -52.165
+    if not os.path.exists('stock_dfs'):
+        os.makedirs('stock_dfs')
+    else:
+        print('Directory Exists')
 
-lm.total <- lm(INX.first ~ XLF.first, data = data.frame(INX.first, XLF.first))
-resids <- lm.total$residuals # converting to pct
+    for stock in tickers:
+        if not exists('SP500/{}.csv'.format(stock)):
+            try:
+                ts = TimeSeries(key='C98CEUQBPZ9L15IV', output_format='pandas')
+                ticker, meta_data = ts.get_daily(symbol=stock, outputsize="full")
+                ticker = ticker.iloc[2300:]
+                drop_labs = [
+                    'open',
+                    'high',
+                    'low',
+                    'volume',
+                ]
+                ticker.drop(drop_labs, axis=1, inplace=True)
+                ticker.rename(columns={'close':stock}, inplace=True)
+                ticker.to_csv('stock_dfs/{}.csv'.format(stock))
+                print("Adding {} to stock_dfs directory".format(stock))
+            except:
+                print("Unable to read URL for: {}".format(stock))
 
-###########################################
-### COLLECTED RESIDUALS FROM REGRESSION ###
-###########################################
-plot(resids[100:500]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
-     col = "darkblue", lwd = 2, ylim = c(-2, 2))
-model.sd <- sigma(lm.total)
-abline(a = ((1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
-abline(a = ((-1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
-legend("topleft", legend=c("Residuals", "+/- 1.5 Std.Dev"),
-       col=c("darkblue","darkgray"), lty=c(1,2), lwd=c(2,2), cex=0.8)
+def quandl_pull(request_again, api_key):
+    quandl.ApiConfig.api_key = api_key
+    if request_again == True:
+        tickers = update_ticks()
 
-resids.ACF <- acf(resids, type = "correlation", plot = TRUE, main = "Spread(%)")
-adf.resids <- adf.test(lm.total$residuals, alternative = "stationary", k = 0)
-adf.resids # DFt = -46.035
+    else:
+        with open('SP500quotes.pickle', 'rb') as f:
+            tickers = pickle.load(f)
 
-mu <- mean(resids)
-sigma <- sd(resids)
-trade.sig <- (resids - mu) / sigma
-alpha <- lm.total$coefficients[1]
-beta <- lm.total$coefficients[2]
-# INX - beta * XLF - alpha
+    if not os.path.exists('stock_dfs'):
+        os.makedirs('stock_dfs')
+    else:
+        print('Directory Exists')
 
-####################################
-### DISTRIBUTION OF SPREAD GRAPH ###
-####################################
-hist(trade.sig, breaks=100, col="darkblue", main = "Distribution of Spread", xlab = "Std.Dev") 
+    for stock in tickers:
+        if not exists('SP500/{}.csv'.format(stock)):
+            try:
+                data = quandl.get('EOD/AAPL',
+                                  paginate=True,
+                                  start_date="2010-01-01",
+                                  end_date="2017-12-13")
+                drop_cols = [name for name in data.columns if name != 'Close']
+                data.drop(labels=drop_cols, inplace=True, axis=1)
+                data.rename(columns={'Close':stock}, inplace=True)
+                data.to_csv('stock_dfs/{}.csv'.format(stock))
+                print("Adding {} to stock_dfs directory".format(stock))
+            except:
+                print("Unable to read URL for: {}".format(stock))
 
-sectors$.INX_Close # X1
-sectors$XLF_Close # Y1
+def single_df():
 
-plot(resids[100:150]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
-     col = "darkblue", lwd = 2, ylim = c(-2, 2))
+    with open('SP500quotes.pickle', 'rb') as f:
+        tickers = pickle.load(f)
 
+    # tickers.append('comps')
+    main_df = pd.DataFrame()
 
-bINX <- 0
-bXLF <- 0
-money <- 1000
-pos <-c()
-ix <- 0
-trade.sig
-for (z.score in trade.sig) {
-  ix <- ix + 1
-  b<-0
-  pos<-c(pos,b)
-  if (z.score > 2){ # test several trade.sig's
-    bINX<-bINX + 1
-    shares <- 1
-    pos[ix] = 1
-    # create function for all of that
-  }
-  if (z.score < 2) {
-    bXLF = bXLF + 1
-    pos[ix] = 2
-  }
-}
-trade.sig
+    for stock in tickers:
+        try:
 
-pos
+            df = pd.read_csv('stock_dfs/{}.csv'.format(stock))
 
-pos
-warnings()
+            print(df.head())
+            print(df.tail())
 
-beta
+            # df.reset_index(inplace=True)
+            df.rename(columns={'Unnamed: 0':'Periods'}, inplace=True)
+            period_start = str(df['Periods'][0])
+            period_end = str(df.tail(1)['Periods'])
 
+            if '2017-12-11' in period_end and '2007-11-27' in period_start:
+                if main_df.empty:
+                    main_df = df
 
-lm.total
+                else:
+                    main_df = main_df.merge(df)
+            break
+        except:
+            pass
 
-pr.out <- prcomp(stocks.df, scale = TRUE, retx = TRUE)
-pr.var <- pr.out$sdev^2
-PVE <- pr.var / sum(pr.var)
-par(mfrow=c(1,1))
-barplot(PVE[1:20], xlab = "Principal Component", ylab = "Proportion of Variance Explained",
-        ylim = c(0,1), col = "navyblue")
-lines(cumsum(PVE[1:20]), xlab = "Principal Component", ylab = "Cumulative Proportion of Variance Explained",
-     ylim = c(0,1), col = "navyblue", type = "l", pch = 19)
-cumsum(PVE[1:20])[3] 
-# 3 PCs explain 84.65% of Variance
+    # main_df.to_csv('Joined_Closes.csv')
 
-principal.comps <- pr.out$x[,1:3]
-upd.pred <- cbind(principal.comps, df["USvsEURO"])
+def currency_data():
+    fred = Fred(api_key='cf154315e654c009c1b944f20dd1e028')
 
-Cols <- function(vec) {
-  cols <- rainbow(length(unique(vec)))
-  return(cols[as.numeric(as.factor(vec))])
-}
-stocks.labs <- names(stocks.df)
-par(mfrow = c(1,3))
-plot(c(upd.pred$PC1,upd.pred$PC3), col = Cols(stocks.labs), pch=19,
-     xlab = "Z1", ylab = "Z3")
-plot(c(upd.pred$PC2,upd.pred$PC3), col = Cols(stocks.labs), pch = 19,
-     xlab = "Z2", ylab = "Z3")
-plot(c(upd.pred$PC1,upd.pred$PC2), col = Cols(stocks.labs), pch = 19,
-     xlab = "Z1", ylab = "Z2")
-# explain over 85% of variance with 3 principal components
+    USEUROforex = fred.get_series('DEXUSEU')
+    USEUROforex = pd.DataFrame(USEUROforex).iloc[2321:]
+    USEUROforex.columns = ['USvsEURO']
+
+    USEUROforex.fillna(
+        method="bbfill",
+        inplace=True,
+    )
+
+    JC = pd.read_csv('Joined_Closes.csv').iloc[:1478]
+
+    exchange_indices = [str(ix)[0:10] for ix in USEUROforex.index.values]
+    JC_indices = [ix[0:10] for ix in JC['Periods']]
+
+    labs = []
+    for i in exchange_indices:
+        if i not in JC_indices:
+            labs.append(i)
+
+    USEUROforex.reset_index(inplace=True)
+    USEUROforex_dict = {'USvsEURO':[]}
+    for i, ix in enumerate(USEUROforex['index']):
+        if str(ix)[0:10] in labs:
+            pass
+        else:
+            USEUROforex_dict['USvsEURO'].append(USEUROforex['USvsEURO'][i])
+
+    USEUROforex = pd.DataFrame.from_dict(USEUROforex_dict)
+
+    JC = JC.join(USEUROforex)
+    JC.drop('Unnamed: 0', axis=1, inplace=True)
+
+    JC.to_csv('Indicators_Joined_.csv')
+
+def sectors():
+
+    params = [
+        {
+            'q': 'XLF',
+            'x': 'NYSEARCA',
+        },
+        {
+            'q': '.INX',
+            'x': 'INDEXSP'
+        }
+    ]
+
+    comparables = get_prices_time_data(params, period="10Y", interval="86400")
+
+    index = ['XLF', '.INX']
+    for name in index:
+        comparables.drop(labels=[
+            "{}_Open".format(name),
+            "{}_High".format(name),
+            "{}_Low".format(name),
+        ],
+            axis=1, inplace=True
+        )
+    print(comparables.head())
+    # comparables.to_csv('Sectors.csv')
+
+quandl_pull(request_again=False, api_key="UvnTzbiRyVMTwtkL26iK")
+#alpha_vantage_pull(request_again=False)
+#goog_pull(request_again=True)
+# single_df()
+# currency_data()
+#sectors()
