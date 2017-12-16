@@ -164,6 +164,11 @@ plot(test.FOX[1:10], type = "l", col = "darkblue", ylim = c(-0.07, 0.07))
 lines(test.FOXA[1:10], type = "l", col = "darkgray")
 abline(a = 0, b = 0, col = "red", lwd = 2, lty = 2)
 
+cum.rets <- read.csv("Cumulative_Returns.csv")[,2:9]
+names(cum.rets) <- sub("cumRets_", "z", names(cum.rets))
+par(mfrow=c(1,1))
+plot(cum.rets$z1.3, type = "l", col = "darkblue", ylab = "Cumulative Returns",
+     xlab = "2Y (2016 & 2017)", lwd = 1.5)
 
 ### KEEP IN MIND THIS IS ENTIRE DF (in terms of dates - might need to do train/test)
 ### first do PCE, then convert to returns??
