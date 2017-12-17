@@ -19,8 +19,6 @@ lines(stock.prices[,'FOXA'], type = "l", col = "darkgray")
 legend("topleft", legend=c("FOX", "FOXA"),
        col=c("darkblue","darkgray"), lty=c(1,1), lwd=c(1.5,1.5), cex=0.8)
 
-
-### FIGURE OUT HOW TO ITERATE ENTIRE DATAFRAME
 #rets <- data.frame(ts(stock.prices) / lag(ts(stock.prices), k = 1) - 1) # calculating daily pct change **will lose 1st dp**
 rets.train <- data.frame(
   Delt(stock.prices$FOX, k = 1, type = "arithmetic"),
@@ -68,18 +66,6 @@ lm.total <- lm(FOX.first ~ FOXA.first, data = data.frame(FOX.first, FOXA.first))
 resids <- lm.total$residuals
 test.data <- all.stocks[1526:dim(all.stocks[1]),]
 
-
-###: FIGURE OUT HOW TO MERGE PCT CHANGE DF
-#rets.1 <- data.frame(ts(test.data) / lag(ts(test.data), k = 1) - 1) # calculating daily pct change **will lose 1st dp**
-rets.1 <- data.frame()
-for (i in names(test.data)) {
-  if (dim(rets.1)[1] == 1) {
-    rets.1 <- data.frame(Delt(test.data$i, k = 1, type = "arithmetic"))
-  } else {
-    rets.1 <- cbind(rets.1, data.frame(Delt(test.data$i, k = 1, type = "arithmetic")))
-  }
-}
-
 rets.stocks <- data.frame(
     Delt(test.data$FOX, k = 1, type = "arithmetic"),
     Delt(test.data$FOXA, k = 1, type = "arithmetic")
@@ -103,7 +89,7 @@ trade.sig.1 <- (resids.1 - mu) / sigma
 ###########################################
 ### COLLECTED RESIDUALS FROM REGRESSION ###
 ###########################################
-par(mfrow=c(1,1))
+par(mfrow=c(1,2))
 plot(resids[100:500]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
      col = "darkgray", lwd = 1, ylim = c(-2, 2))
 model.sd <- sigma(lm.total)
@@ -164,51 +150,47 @@ plot(test.FOX[1:10], type = "l", col = "darkblue", ylim = c(-0.07, 0.07))
 lines(test.FOXA[1:10], type = "l", col = "darkgray")
 abline(a = 0, b = 0, col = "red", lwd = 2, lty = 2)
 
-cum.rets <- read.csv("Cumulative_Returns.csv")[,2:9]
-names(cum.rets) <- sub("cumRets_", "z", names(cum.rets))
+cum.rets <- read.csv("Cumulative_Returns.csv")
+cum.rets <- cum.rets[2:dim(cum.rets)[1], 3:dim(cum.rets)[2]]
+names(cum.rets)[1] <- sub("cumRets_1.0", "CumRet", names(cum.rets)[1])
 par(mfrow=c(1,1))
-plot(cum.rets$z1.3, type = "l", col = "darkblue", ylab = "Cumulative Returns",
-     xlab = "2Y (2016 & 2017)", lwd = 1.5)
+plot(cum.rets[2:249,]$CumRet, type = "l", col = "darkblue", ylab = "Cumulative Returns",
+     xlab = "2016 Backtest", lwd = 1.5)
 
-### KEEP IN MIND THIS IS ENTIRE DF (in terms of dates - might need to do train/test)
-### first do PCE, then convert to returns??
-###: try for standardized, then regular PCA when backtesting final results
-normed.df[1:5,1]
-names(normed.d)
-pr.out <- prcomp(normed.df, scale = TRUE, retx = TRUE)
+############################
+### Principal Components ###
+############################
+stock.prices[1:5,]
+pr.out <- prcomp(stock.prices, scale = TRUE, retx = TRUE)
 pr.var <- pr.out$sdev^2
 PVE <- pr.var / sum(pr.var)
 par(mfrow=c(1,1))
 barplot(PVE[1:12], xlab = "Principal Component", ylab = "Proportion of Variance Explained",
-        col = "navyblue", ylim = c(0,1)) # first 20 PC
-lines(cumsum(PVE[1:12]), col = "darkgray", type = "l", lwd = 2)
-install.packages("Hmisc");library(Hmisc)
-#minor.tick(ny=1, tick.ratio=1)
-cumsum(PVE)
+        col = "darkgray", ylim = c(0,1)) # first 20 PC
+lines(cumsum(PVE[1:12]), col = "darkblue", type = "l", lwd = 1)
+cumsum(PVE)[3]
 
-p.vals <- rep(NA, length(names(normed.df)))
-for (tick in names(normed.df)) {
-  tickr.first <- diff(normed.df[,tick], lag = 1, differences = 1)
+p.vals <- rep(NA, length(names(stock.prices)))
+count = 1
+for (tick in names(stock.prices)) {
+  tickr.first <- diff(stock.prices[,tick], lag = 1, differences = 1)
   options(warn = -1)
   adf.tickr <- adf.test(tickr.first, alternative = "stationary", k = 0)
   p.vals[count] <- adf.tickr$statistic
   count <- count + 1
 }
-p.vals <- na.omit(p.vals)
-failed <- rep(NA, length(names(normed.df)))
-for (i in 1:length(p.vals)) {
-  if (p.vals[i] > -20) {
-    failed[i] <- names(normed.df)[i]
+for (adf in 1:length(p.vals)) {
+  if (is.nan(p.vals[adf])) {
+    print("Failed Dickey Fuller for " + names(stock.prices)[adf])
   }
 }
-failed
 
 principal.comps <- pr.out$x[,1:3]
 Cols <- function(vec) {
   cols <- rainbow(length(unique(vec)))
   return(cols[as.numeric(as.factor(vec))])
 }
-stocks.labs <- names(normed.df)
+stocks.labs <- names(stock.prices)
 par(mfrow = c(1,3))
 plot(c(principal.comps[,1],principal.comps[,3]), col = Cols(stocks.labs), pch=19,
      xlab = "Z1", ylab = "Z3")
@@ -216,13 +198,14 @@ plot(c(principal.comps[,2],principal.comps[,3]), col = Cols(stocks.labs), pch = 
      xlab = "Z2", ylab = "Z3")
 plot(c(principal.comps[,1],principal.comps[,2]), col = Cols(stocks.labs), pch = 19,
      xlab = "Z1", ylab = "Z2")
-# explain over 85% of variance with 3 principal components
-par(mfrow=c(1,1))
-plot(principal.comps[,1], col = "darkgray", ylab = "Variance from PC's", type = "l")
-lines(principal.comps[,2], col = "lightskyblue", ylab = "Z1", type = "l")
-lines(principal.comps[,3], col = "darkblue", ylab = "Z1", type = "l")
-
-# explain over 85% of variance with 3 principal components
-
-## create a line chart with 2sd matlines accross the entire time period with 
-## ROLLING sd and mean. (investopedia link)
+# explain over 83% of variance with 3 principal components
+par(mfrow=c(3,1))
+for (i in 1:3) {
+  plot(principal.comps[,i], col = "darkblue", type = "l")
+}
+Z1 <- diff(Delt(principal.comps[,1], k = 1, type = "arithmetic"), lag = 1, differences = 1)
+Z2 <- diff(Delt(principal.comps[,2], k = 1, type = "arithmetic"), lag = 1, differences = 1)
+Z3 <- diff(Delt(principal.comps[,3], k = 1, type = "arithmetic"), lag = 1, differences = 1)
+plot(Z1, type = "l", col = "darkblue")
+plot(Z2, type = "l", col = "darkblue")
+plot(Z3, type = "l", col = "darkblue")
