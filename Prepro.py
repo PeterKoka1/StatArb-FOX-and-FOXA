@@ -26,35 +26,44 @@ def update_ticks():
 
     return tickers
 
-### quandl may work for goog and googl but not necessary to use
-def quandl_pull(api_key):
-    quandl.ApiConfig.api_key = api_key
+def alpha_vantage_pull(request_again, api_key):
+    if request_again == True:
+        tickers = update_ticks()
+
+    else:
+        with open('SP500quotes.pickle', 'rb') as f:
+            tickers = pickle.load(f)
 
     if not os.path.exists('stock_dfs'):
         os.makedirs('stock_dfs')
     else:
         print('Directory Exists')
-    ticks = [
-        'GOOG',
-        'GOOGL'
-             ]
 
-    for stock in ticks:
+    for stock in tickers:
         if not exists('SP500/{}.csv'.format(stock)):
             try:
-                data = quandl.get('EOD/{}'.format(stock),
-                                  paginate=True,
-                                  start_date="2010-01-01",
-                                  end_date="2017-12-13")
-                drop_cols = [name for name in data.columns if name != 'Close']
-                data.drop(labels=drop_cols, inplace=True, axis=1)
-                data.rename(columns={'Close':stock}, inplace=True)
-                data.to_csv('stock_dfs/{}.csv'.format(stock))
-                print("Adding {} to stock_dfs directory".format(stock))
+                ts = TimeSeries(key=api_key,
+                                output_format='pandas')
+                ticker, meta_data = ts.get_daily(symbol=stock,
+                                                 outputsize="full")
+                ticker = ticker.iloc[2500:]
+                drop_labs = [
+                    'open',
+                    'high',
+                    'low',
+                    'volume',
+                ]
+                ticker.drop(drop_labs, axis=1, inplace=True)
+                ticker.rename(columns={'close':stock}, inplace=True)
+                if ticker.empty:
+                    print("Empty dataframe for {} - will not add to stocks_dfs dir".format(stock))
+                else:
+                    ticker.to_csv('stock_dfs/{}.csv'.format(stock))
+                    print("Adding {} to stock_dfs directory".format(stock))
             except:
-                print("Unable to read URL for: {}".format(stock))
+                s = "Error: {}".format(sys.exc_info()[0])
+                s += "\nwhile fetching data for {}".format(stock)
 
-### putting into 1 df
 def single_df():
 
     missing_ticks = []
@@ -82,6 +91,34 @@ def single_df():
         print("CSV with joined closes saved as 'Joined_Closes.csv'.")
     except:
         print("Unable to save CSV of joined closes.")
+
+###: rest can be ignored
+def quandl_pull(api_key):
+    quandl.ApiConfig.api_key = api_key
+
+    if not os.path.exists('stock_dfs'):
+        os.makedirs('stock_dfs')
+    else:
+        print('Directory Exists')
+    ticks = [
+        'FOX',
+        'FOXA'
+             ]
+
+    for stock in ticks:
+        if not exists('SP500/{}.csv'.format(stock)):
+            try:
+                data = quandl.get('EOD/{}'.format(stock),
+                                  paginate=True,
+                                  start_date="2010-01-01",
+                                  end_date="2017-12-13")
+                drop_cols = [name for name in data.columns if name != 'Close']
+                data.drop(labels=drop_cols, inplace=True, axis=1)
+                data.rename(columns={'Close':stock}, inplace=True)
+                data.to_csv('stock_dfs/{}.csv'.format(stock))
+                print("Adding {} to stock_dfs directory".format(stock))
+            except:
+                print("Unable to read URL for: {}".format(stock))
 
 ###: googlefinance.client having issues with pulling historicals
 def goog_pull(request_again):
@@ -124,46 +161,8 @@ def goog_pull(request_again):
             except:
                 print("Unable to read URL for: {}".format(stock))
 
-def alpha_vantage_pull(request_again):
-    if request_again == True:
-        tickers = update_ticks()
-
-    else:
-        with open('SP500quotes.pickle', 'rb') as f:
-            tickers = pickle.load(f)
-
-    if not os.path.exists('stock_dfs'):
-        os.makedirs('stock_dfs')
-    else:
-        print('Directory Exists')
-
-    for stock in tickers:
-        if not exists('SP500/{}.csv'.format(stock)):
-            try:
-                ts = TimeSeries(key='C98CEUQBPZ9L15IV',
-                                output_format='pandas')
-                ticker, meta_data = ts.get_daily(symbol=stock,
-                                                 outputsize="full")
-                ticker = ticker.iloc[2500:]
-                drop_labs = [
-                    'open',
-                    'high',
-                    'low',
-                    'volume',
-                ]
-                ticker.drop(drop_labs, axis=1, inplace=True)
-                ticker.rename(columns={'close':stock}, inplace=True)
-                if ticker.empty:
-                    print("Empty dataframe for {} - will not add to stocks_dfs dir".format(stock))
-                else:
-                    ticker.to_csv('stock_dfs/{}.csv'.format(stock))
-                    print("Adding {} to stock_dfs directory".format(stock))
-            except:
-                s = "Error: {}".format(sys.exc_info()[0])
-                s += "\nwhile fetching data for {}".format(stock)
-
-def currency_data():
-    fred = Fred(api_key='cf154315e654c009c1b944f20dd1e028')
+def currency_data(api_key):
+    fred = Fred(api_key=api_key)
 
     USEUROforex = fred.get_series('DEXUSEU')
     USEUROforex = pd.DataFrame(USEUROforex)
@@ -220,5 +219,4 @@ def sectors():
         ],
             axis=1, inplace=True
         )
-    print(comparables.head())
-    # comparables.to_csv('Sectors.csv')
+    comparables.to_csv('Sectors.csv')
