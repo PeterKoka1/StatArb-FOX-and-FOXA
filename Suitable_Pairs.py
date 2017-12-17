@@ -20,4 +20,3 @@ def suitable():
         print(tick, corr)
 
 suitable()
-
