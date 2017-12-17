@@ -1,5 +1,5 @@
-install.packages("dse")
-library(tseries)
+setwd("C:/Users/PeterKokalov/lpthw/Pairs-Model-FOX-FOXA")
+library(tseries);library(quantmod)
 df <- read.csv('Joined_Closes.csv')
 date.col <- df['Date']
 dropcols <- c('X','Date')
@@ -23,7 +23,7 @@ legend("topleft", legend=c("FOX", "FOXA"),
 rets.train <- data.frame(
   Delt(stock.prices$FOX, k = 1, type = "arithmetic"),
   Delt(stock.prices$FOXA, k = 1, type = "arithmetic")
-                    )[2:dim(stock.prices)[1],]
+)[2:dim(stock.prices)[1],]
 names(rets.train) <- c("FOX", "FOXA")
 plot(rets.train[1:100,"FOX"], type = "l", col = "darkblue")
 
@@ -67,9 +67,9 @@ resids <- lm.total$residuals
 test.data <- all.stocks[1526:dim(all.stocks[1]),]
 
 rets.stocks <- data.frame(
-    Delt(test.data$FOX, k = 1, type = "arithmetic"),
-    Delt(test.data$FOXA, k = 1, type = "arithmetic")
-                      )[2:dim(test.data)[1],]
+  Delt(test.data$FOX, k = 1, type = "arithmetic"),
+  Delt(test.data$FOXA, k = 1, type = "arithmetic")
+)[2:dim(test.data)[1],]
 names(rets.stocks) <- c("FOX","FOXA")
 par(mfrow=c(1,1));plot(rets.stocks[100:400,"FOX"], type = "l", col = "darkblue")
 
@@ -156,11 +156,11 @@ names(cum.rets)[1] <- sub("cumRets_1.0", "CumRet", names(cum.rets)[1])
 par(mfrow=c(1,1))
 plot(cum.rets[2:249,]$CumRet, type = "l", col = "darkblue", ylab = "Cumulative Returns",
      xlab = "2016 Backtest", lwd = 1.5)
+returns <- (cum.rets$CumRet[249] - cum.rets$CumRet[1]) * 100
 
 ############################
 ### Principal Components ###
 ############################
-stock.prices[1:5,]
 pr.out <- prcomp(stock.prices, scale = TRUE, retx = TRUE)
 pr.var <- pr.out$sdev^2
 PVE <- pr.var / sum(pr.var)
@@ -209,3 +209,26 @@ Z3 <- diff(Delt(principal.comps[,3], k = 1, type = "arithmetic"), lag = 1, diffe
 plot(Z1, type = "l", col = "darkblue")
 plot(Z2, type = "l", col = "darkblue")
 plot(Z3, type = "l", col = "darkblue")
+
+SVM.signal <- rep(0,length(output$hedge))
+for (i in 1:length(SVM.signal)) {
+  if (i != 490) {
+    if (output$hedge[i] > output$hedge[i+1]) {
+      SVM.signal[i] <- 0
+    }else {
+      SVM.signal[i] <- 1
+    }
+  }
+}
+rsi <- RSI(output$hedge, n = 3)
+sma <- SMA(output$hedge, n = 5)
+
+library(e1071)
+train.svm <- data.frame(SVM.signal, rsi, sma, output$trade.sig)
+svmfit <- svm(train.svm$SVM.signal ~., data = train.svm, kernel = "radial", cost = 10,
+               gamma = 3)
+par(mfrow=c(1,1))
+plot(svmfit, train.svm)
+table(predict = round(predict(svmfit, train.svm)), truth = train.svm$SVM.signal[5:length(train.svm$SVM.signal)])
+224 / (224 + 35)
+199 / (199 + 28)
