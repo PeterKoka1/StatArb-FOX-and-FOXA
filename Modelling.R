@@ -29,6 +29,7 @@ par(mfrow=c(2,1))
 plot(rets.train[1:100,"FOX"], type = "l", col = "darkblue", ylab = "FOX Returns", xlab = "write own (2009-12-10)")
 plot(rets.train[1:100,"FOXA"], type = "l", col = "darkblue", ylab = "FOXA Returns", xlab = "write own (2009-12-10)")
 
+
 ##########################
 ### FOX vs. FOXA Plots ###
 ##########################
@@ -66,6 +67,7 @@ adf.test(FOXA.first, alternative = "stationary", k = 0) # Dickey Fuller Statisti
 ### final regression run on DIFFERENCED FOX AND DIFFERENCED FOXA
 lm.total <- lm(FOX.first ~ FOXA.first, data = data.frame(FOX.first, FOXA.first))
 resids <- lm.total$residuals
+mu <- mean(resids); sigma <- sd(resids); alpha <- lm.total$coefficients[1]; beta <- lm.total$coefficients[2]
 
 ###:TESTING
 test.data <- all.stocks[1526:dim(all.stocks[1]),]
@@ -82,28 +84,20 @@ test.FOX <- diff(rets.stocks$FOX, lag = 1, differences = 1)
 test.FOXA <- diff(rets.stocks$FOXA, lag = 1, differences = 1)
 mean((test.FOX - predict.lm(lm.total, newdata = data.frame(test.FOX, test.FOXA)))^2)
 
+####################################
+### RESIDUALS AND TRADING SIGNAL ###
+####################################
 resids.1 <- test.FOX - beta*test.FOXA - alpha
+trade.sig.1 <- (resids.1 - mu) / sigma
 par(mfrow=c(1,1))
 plot(resids.1, type = "l", col = "darkgray", ylab = "Residuals")
 resids.1.ACF <- acf(resids.1, type = "correlation", plot = TRUE, main = "Spread (%)")
 adf.test(resids.1, alternative = "stationary", k = 0) # Dickey Fuller Stat -44.709
 
-mu <- mean(resids); sigma <- sd(resids); alpha <- lm.total$coefficients[1]; beta <- lm.total$coefficients[2]
-trade.sig <- (resids - mu) / sigma
-trade.sig.1 <- (resids.1 - mu) / sigma
 
 ###########################################
 ### COLLECTED RESIDUALS FROM REGRESSION ###
 ###########################################
-par(mfrow=c(1,2))
-plot(resids[1:100]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
-     col = "darkgray", lwd = 1, ylim = c(-2, 2))
-model.sd <- sigma(lm.total)
-abline(a = ((2 * model.sd)*100), b = 0, lwd = 1, col = "darkblue", lty = 2)
-abline(a = ((-2 * model.sd)*100), b = 0, lwd = 1, col = "darkblue", lty = 2)
-legend("topleft", legend=c("Residuals", "+/- 2.0 Std.Dev"),
-       col=c("darkgray","darkblue"), lty=c(1,2), lwd=c(1,1), cex=0.8)
-
 par(mfrow=c(1,2))
 for (indx in c(50,200)) {
   plot(resids.1[1:indx]*100, type = "l", xlab = sprintf("%i Indexed Days", indx), ylab = "% Spread",
@@ -119,7 +113,7 @@ for (indx in c(50,200)) {
 ### DISTRIBUTION OF SPREAD GRAPH ###
 ####################################
 par(mfrow=c(1,1))
-hist(trade.sig, breaks=100, col="darkblue", main = "", xlab = "Std.Dev")
+hist(trade.sig.1, breaks=50, col="darkblue", main = "", xlab = "Std.Dev")
 
 test.data$FOX # X1
 test.data$FOXA # Y1
@@ -146,6 +140,56 @@ names(output)[6] <- sub("rep.beta..length.trade.sig.1..", "beta", names(output[6
 names(output)[7] <- sub("data.frame.test.data.FOX...test.data.FOXA...beta...alpha..3.dim.test.data..1...",
                         "hedge", names(output[7]))
 names(output)[8] <- sub("dates.test.3.length.dates.test..", "Date", names(output[8]))
+
+FOX.first.add <- data.frame(FOX.first);names(FOX.first.add) <- "FOX"
+FOX.first.add2 <- data.frame(output$diffFOX);names(FOX.first.add2) <- "FOX"
+FOXA.first.add <- data.frame(FOXA.first);names(FOXA.first.add) <- "FOXA"
+FOXA.first.add2 <- data.frame(output$diffFOXA);names(FOXA.first.add2) <- "FOXA"
+update.beta <- data.frame(rbind(FOX.first.add, FOX.first.add2),rbind(FOXA.first.add, FOXA.first.add2) )
+
+beta.list <- rep(0, length(output$beta))
+cur.beta <- beta
+look.back <- 1:length(beta.list)
+periods <- look.back[seq(1, length(look.back), 25)]
+for (i in 1:length(beta.list)) {
+  if (i %in% periods) {
+    beta.update <- lm(update.beta$FOX[1:1525+i] ~ update.beta$FOXA[1:1525+i], data = update.beta)$coefficients[2]
+    cur.beta <- beta.update
+  }
+  beta.list[i] <- cur.beta
+}
+plot(beta.list, type = "l", col = "darkblue")
+
+resids.add1 <- data.frame(resids);names(resids.add1) <- "resids"
+resids.add2 <- data.frame(resids.1);names(resids.add2) <- "resids"
+update.musd <- rbind(resids.add1, resids.add2)
+mean.list <- rep(0, dim(output)[1])
+cur.mean <- mu
+for (i in 1:length(mean.list)) {
+  mean.list[i] <- rollapplyr(update.musd$resids, width = 1:1525 + i, mean, fill = 0)[1525+i]
+}
+sd.list <- rep(0, dim(output)[1])
+cur.sd <- sigma
+for (i in 1:length(sd.list)) {
+  sd.list[i] <- rollapplyr(update.musd$resids, width = 1:1525 + i, sd, fill = 0)[1525+i]
+}
+sd.list[489] <- sd.list[488];sd.list[490] <- sd.list[489]
+mean.list[489] <- mean.list[488];mean.list[490] <- mean.list[489]
+trade.sig.update <- (resids.1 - mean.list) / sd.list
+# less profitable to update sd and mean
+sigma
+
+par(mfrow=c(1,1))
+plot(resids.1[1:50], xlim = c(3,50), type = "l", col = "darkgray", xlab = "(add own) 2016-1-04 50 days", ylab = "Residuals")
+for (i in c(1, -1)) {
+  lines(rep(i * sigma, length(resids.1)), col = "darkblue", lty = 2)  
+}
+lines(rep(mu, length(resids.1)), col = "red", lty = 2)
+legend("topright", legend=c("Residuals", "+/- 1.0 Std.Dev", "Mean"),
+       col=c("darkgray","darkblue", "red"), lty=c(1,2,2), lwd=c(1,1), cex=0.8)
+
+output$beta <- beta.list
+output$hedge <- data.frame(test.data$FOX - test.data$FOXA*output$beta)[3:dim(test.data)[1],]
 write.csv(output, "signals1.csv")
 
 par(mfrow=c(1,2))
@@ -158,10 +202,90 @@ lines(test.FOXA[1:10], type = "l", col = "darkgray")
 abline(a = 0, b = 0, col = "red", lwd = 2, lty = 2)
 
 cum.rets <- read.csv("Cumulative_Returns.csv")
-cum.rets <- cum.rets[2:dim(cum.rets)[1], 3:dim(cum.rets)[2]]
-names(cum.rets)[1] <- sub("cumRets_1.0", "CumRet", names(cum.rets)[1])
 par(mfrow=c(1,1))
-plot(cum.rets[2:249,]$CumRet, type = "l", col = "darkblue", ylab = "Cumulative Returns",
-     xlab = "2016 Backtest", lwd = 1.5)
-returns <- (cum.rets$CumRet[249] - cum.rets$CumRet[1]) * 100
-returns # 5.028% 2016 returns. Profitable!
+dim(cum.rets)
+plot(cum.rets[,2], type = "l", col = "darkblue", ylab = "Returns", xlab = "2Y")
+returns <- (cum.rets$cumRets_1.0[489] - cum.rets$cumRets_1.0[2]) * 100
+returns # 14.28%. Profitable!
+
+#: Can ignore Principal Component Analysis and SVM
+pr.out <- prcomp(stock.prices, scale = TRUE, retx = TRUE)
+pr.var <- pr.out$sdev^2
+PVE <- pr.var / sum(pr.var)
+par(mfrow=c(1,1))
+barplot(PVE[1:12], xlab = "Principal Component", ylab = "Proportion of Variance Explained",
+        col = "darkgray", ylim = c(0,1)) # first 20 PC
+lines(cumsum(PVE[1:12]), col = "darkblue", type = "l", lwd = 1)
+cumsum(PVE)[3]
+
+p.vals <- rep(NA, length(names(stock.prices)))
+count = 1
+for (tick in names(stock.prices)) {
+  tickr.first <- diff(stock.prices[,tick], lag = 1, differences = 1)
+  options(warn = -1)
+  adf.tickr <- adf.test(tickr.first, alternative = "stationary", k = 0)
+  p.vals[count] <- adf.tickr$statistic
+  count <- count + 1
+}
+for (adf in 1:length(p.vals)) {
+  if (is.nan(p.vals[adf])) {
+    print("Failed Dickey Fuller for " + names(stock.prices)[adf])
+  }
+}
+
+principal.comps <- pr.out$x[,1:3]
+Cols <- function(vec) {
+  cols <- rainbow(length(unique(vec)))
+  return(cols[as.numeric(as.factor(vec))])
+}
+stocks.labs <- names(stock.prices)
+par(mfrow = c(1,3))
+plot(c(principal.comps[,1],principal.comps[,3]), col = Cols(stocks.labs), pch=19,
+     xlab = "Z1", ylab = "Z3")
+plot(c(principal.comps[,2],principal.comps[,3]), col = Cols(stocks.labs), pch = 19,
+     xlab = "Z2", ylab = "Z3")
+plot(c(principal.comps[,1],principal.comps[,2]), col = Cols(stocks.labs), pch = 19,
+     xlab = "Z1", ylab = "Z2")
+# explain over 83% of variance with 3 principal components
+par(mfrow=c(3,1))
+for (i in 1:3) {
+  plot(principal.comps[,i], col = "darkblue", type = "l")
+}
+Z1 <- diff(Delt(principal.comps[,1], k = 1, type = "arithmetic"), lag = 1, differences = 1)
+Z2 <- diff(Delt(principal.comps[,2], k = 1, type = "arithmetic"), lag = 1, differences = 1)
+Z3 <- diff(Delt(principal.comps[,3], k = 1, type = "arithmetic"), lag = 1, differences = 1)
+plot(Z1, type = "l", col = "darkblue")
+plot(Z2, type = "l", col = "darkblue")
+plot(Z3, type = "l", col = "darkblue")
+
+names(output)
+dim(stock.prices)
+output$Date
+
+SVM.signal <- rep(0,length(output$hedge))
+for (i in 1:length(SVM.signal)) {
+  if (i != 490) {
+    if (output$hedge[i] > output$hedge[i+1]) {
+      SVM.signal[i] <- 0
+    }else {
+      SVM.signal[i] <- 1
+    }
+  }
+}
+rsi <- RSI(output$trade.sig, n = 3)
+sma <- SMA(output$trade.sig, n = 5)
+
+library(e1071)
+train.svm <- data.frame(SVM.signal, rsi, sma, output$trade.sig, Z1, Z2, Z3)
+names(train.svm)[1] <- sub("as.factor.SVM.signal.", "SVM.signal", names(train.svm)[1])
+svmfit <- svm(as.factor(train.svm$SVM.signal) ~ ., data = train.svm, kernel = "radial", cost = 10,
+              gamma = 3)
+
+library(e1071)
+train.svm <- data.frame(SVM.signal, rsi, sma, output$trade.sig)
+attach(train.svm)
+SVM.signal <- as.factor(SVM.signal)
+tune.out <- tune(svm, SVM.signal ~., data = train.svm, kernel = "linear", ranges = list(cost = c(0.01, 0.1, 1, 10, 100, 1000)))
+summary(tune.out) # cost of 1000 performed best
+tune.out.rad <- tune(svm, SVM.signal ~., data = train.svm, kernel = "radial", ranges = list(cost = c(0.01, 0.1, 1, 10, 100, 100), 
+                                                                                            gamma = c(0.1, 0.5, 1, 5)))
