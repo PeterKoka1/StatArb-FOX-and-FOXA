@@ -15,6 +15,7 @@ def back_test():
     cum_rets = pd.DataFrame()
 
     for z in zEntries:
+        ###: Thankful for PythonforFinance for supplying most of the below code
         df1['long entry'] = ((df1.trade_sig < -1.0 * z) & (df1.trade_sig.shift(1) > -1.0 * z))
         df1['long exit'] = ((df1.trade_sig > - exitZscore) & (df1.trade_sig.shift(1) < - exitZscore))
         df1['num units long'] = np.nan
@@ -38,7 +39,8 @@ def back_test():
 
         df1['cum rets'] = df1['port rets'].cumsum()
         df1['cum rets'] = df1['cum rets'] + 1
-
+        ###: Thank you!
+        
         if cum_rets.empty:
             cum_rets = pd.DataFrame(df1['cum rets'])
             cum_rets.rename(columns={'cum rets': 'cumRets_{}'.format(round(z,2))}, inplace=True)
