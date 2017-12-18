@@ -29,7 +29,6 @@ par(mfrow=c(2,1))
 plot(rets.train[1:100,"FOX"], type = "l", col = "darkblue", ylab = "FOX Returns", xlab = "write own (2009-12-10)")
 plot(rets.train[1:100,"FOXA"], type = "l", col = "darkblue", ylab = "FOXA Returns", xlab = "write own (2009-12-10)")
 
-
 ##########################
 ### FOX vs. FOXA Plots ###
 ##########################
