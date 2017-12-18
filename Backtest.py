@@ -13,9 +13,7 @@ def back_test():
     exitZscore = 0
 
     cum_rets = pd.DataFrame()
-
     for z in zEntries:
-        ###: Thankful for PythonforFinance for supplying most of the below code
         df1['long entry'] = ((df1.trade_sig < -1.0 * z) & (df1.trade_sig.shift(1) > -1.0 * z))
         df1['long exit'] = ((df1.trade_sig > - exitZscore) & (df1.trade_sig.shift(1) < - exitZscore))
         df1['num units long'] = np.nan
@@ -39,8 +37,7 @@ def back_test():
 
         df1['cum rets'] = df1['port rets'].cumsum()
         df1['cum rets'] = df1['cum rets'] + 1
-        ###: Thank you!
-        
+
         if cum_rets.empty:
             cum_rets = pd.DataFrame(df1['cum rets'])
             cum_rets.rename(columns={'cum rets': 'cumRets_{}'.format(round(z,2))}, inplace=True)
@@ -73,6 +70,9 @@ def back_test():
             str((cum_rets[bestZ][489] - cum_rets[bestZ][1])*100)[0:4] + "%",
             bestZ[8:11])
         )
+        print("2-yr Return {} with 1.0 ZScore Entry".format(
+            str((cum_rets["cumRets_1.0"][489] - cum_rets["cumRets_1.0"][1])*100)[0:4] + "%"
+        ))
     except KeyError:
         print("KeyError")
 
@@ -81,7 +81,8 @@ def back_test():
     plt.show()
     cumRets_1 = cum_rets['cumRets_1.0']
     cum_rets.drop(labels=[i for i in cum_rets.columns if i != bestZ], inplace=True, axis=1)
-    cum_rets = cum_rets.join(pd.DataFrame(cumRets_1))
+    if bestZ != "cumRets_1.0":
+        cum_rets = cum_rets.join(pd.DataFrame(cumRets_1))
     cum_rets = cum_rets.join(df1['Date'])
     try:
         cum_rets.to_csv("Cumulative_Returns.csv")
