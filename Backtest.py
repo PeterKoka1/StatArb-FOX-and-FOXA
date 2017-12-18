@@ -4,7 +4,6 @@ import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
 
-
 def back_test():
     df1 = pd.read_csv('signals1.csv')
     df1.drop(labels=['Unnamed: 0'], axis=1, inplace=True)
