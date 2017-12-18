@@ -6,7 +6,7 @@ dropcols <- c('X','Date')
 all.stocks <- df[, !(names(df) %in% dropcols)]
 stock.prices <- df[1:1525, !(names(df) %in% dropcols)] # 2009-12-10 to 2015-12-31
 
-### normalized dataframe with just stocks (will use primarily for plotting purposes)
+### normalized dataframe with just stocks (used for plotting purposes)
 normed.df <- stock.prices # copy of stocks.df for normalized prices
 for (i in names(stock.prices)) {
   eq <- stock.prices[,i]
@@ -25,7 +25,10 @@ rets.train <- data.frame(
   Delt(stock.prices$FOXA, k = 1, type = "arithmetic")
 )[2:dim(stock.prices)[1],]
 names(rets.train) <- c("FOX", "FOXA")
-plot(rets.train[1:100,"FOX"], type = "l", col = "darkblue")
+par(mfrow=c(2,1))
+plot(rets.train[1:100,"FOX"], type = "l", col = "darkblue", ylab = "FOX Returns", xlab = "write own (2009-12-10)")
+plot(rets.train[1:100,"FOXA"], type = "l", col = "darkblue", ylab = "FOXA Returns", xlab = "write own (2009-12-10)")
+
 
 ##########################
 ### FOX vs. FOXA Plots ###
@@ -64,21 +67,25 @@ adf.test(FOXA.first, alternative = "stationary", k = 0) # Dickey Fuller Statisti
 ### final regression run on DIFFERENCED FOX AND DIFFERENCED FOXA
 lm.total <- lm(FOX.first ~ FOXA.first, data = data.frame(FOX.first, FOXA.first))
 resids <- lm.total$residuals
-test.data <- all.stocks[1526:dim(all.stocks[1]),]
 
+###:TESTING
+test.data <- all.stocks[1526:dim(all.stocks[1]),]
 rets.stocks <- data.frame(
   Delt(test.data$FOX, k = 1, type = "arithmetic"),
   Delt(test.data$FOXA, k = 1, type = "arithmetic")
 )[2:dim(test.data)[1],]
 names(rets.stocks) <- c("FOX","FOXA")
-par(mfrow=c(1,1));plot(rets.stocks[100:400,"FOX"], type = "l", col = "darkblue")
+par(mfrow=c(2,1))
+plot(rets.stocks[1:400,"FOX"], type = "l", col = "darkblue", ylab = "FOX Returns", xlab = "Make own (2016-04-01)")
+plot(rets.stocks[1:400,"FOXA"], type = "l", col = "darkblue", ylab = "FOXA Returns")
 
 test.FOX <- diff(rets.stocks$FOX, lag = 1, differences = 1)
 test.FOXA <- diff(rets.stocks$FOXA, lag = 1, differences = 1)
 mean((test.FOX - predict.lm(lm.total, newdata = data.frame(test.FOX, test.FOXA)))^2)
 
 resids.1 <- test.FOX - beta*test.FOXA - alpha
-plot(resids.1, type = "l", col = "darkgray")
+par(mfrow=c(1,1))
+plot(resids.1, type = "l", col = "darkgray", ylab = "Residuals")
 resids.1.ACF <- acf(resids.1, type = "correlation", plot = TRUE, main = "Spread (%)")
 adf.test(resids.1, alternative = "stationary", k = 0) # Dickey Fuller Stat -44.709
 
@@ -90,7 +97,7 @@ trade.sig.1 <- (resids.1 - mu) / sigma
 ### COLLECTED RESIDUALS FROM REGRESSION ###
 ###########################################
 par(mfrow=c(1,2))
-plot(resids[100:500]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
+plot(resids[1:100]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
      col = "darkgray", lwd = 1, ylim = c(-2, 2))
 model.sd <- sigma(lm.total)
 abline(a = ((2 * model.sd)*100), b = 0, lwd = 1, col = "darkblue", lty = 2)
@@ -98,20 +105,21 @@ abline(a = ((-2 * model.sd)*100), b = 0, lwd = 1, col = "darkblue", lty = 2)
 legend("topleft", legend=c("Residuals", "+/- 2.0 Std.Dev"),
        col=c("darkgray","darkblue"), lty=c(1,2), lwd=c(1,1), cex=0.8)
 
-###: WHICH COLOR SCHEME DO YOU LIKE MORE?
-
-par(mfrow=c(1,1))
-plot(resids.1[100:500]*100, type = "l", xlab = "400 Indexed Days", ylab = "% Spread",
-     col = "darkblue", lwd = 1, ylim = c(-2, 2))
-model.sd <- sigma(lm.total)
-abline(a = ((1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
-abline(a = ((-1.5 * model.sd)*100), b = 0, lwd = 2, col = "darkgray", lty = 2)
-legend("topleft", legend=c("Residuals", "+/- 1.5 Std.Dev"),
-       col=c("darkblue","darkgray"), lty=c(1,2), lwd=c(1,2), cex=0.8)
+par(mfrow=c(1,2))
+for (indx in c(50,200)) {
+  plot(resids.1[1:indx]*100, type = "l", xlab = sprintf("%i Indexed Days", indx), ylab = "% Spread",
+       col = "darkgray", lwd = 1, ylim = c(-2, 2))
+  model.sd <- sigma(lm.total)
+  abline(a = ((1.5 * model.sd)*100), b = 0, lwd = 1, col = "darkblue", lty = 2)
+  abline(a = ((-1.5 * model.sd)*100), b = 0, lwd = 1, col = "darkblue", lty = 2)
+  legend("topleft", legend=c("Residuals", "+/- 1.5 Std.Dev"),
+         col=c("darkgray","darkblue"), lty=c(1,2), lwd=c(1,1), cex=0.8)
+}
 
 ####################################
 ### DISTRIBUTION OF SPREAD GRAPH ###
 ####################################
+par(mfrow=c(1,1))
 hist(trade.sig, breaks=100, col="darkblue", main = "", xlab = "Std.Dev")
 
 test.data$FOX # X1
@@ -157,78 +165,4 @@ par(mfrow=c(1,1))
 plot(cum.rets[2:249,]$CumRet, type = "l", col = "darkblue", ylab = "Cumulative Returns",
      xlab = "2016 Backtest", lwd = 1.5)
 returns <- (cum.rets$CumRet[249] - cum.rets$CumRet[1]) * 100
-
-############################
-### Principal Components ###
-############################
-pr.out <- prcomp(stock.prices, scale = TRUE, retx = TRUE)
-pr.var <- pr.out$sdev^2
-PVE <- pr.var / sum(pr.var)
-par(mfrow=c(1,1))
-barplot(PVE[1:12], xlab = "Principal Component", ylab = "Proportion of Variance Explained",
-        col = "darkgray", ylim = c(0,1)) # first 20 PC
-lines(cumsum(PVE[1:12]), col = "darkblue", type = "l", lwd = 1)
-cumsum(PVE)[3]
-
-p.vals <- rep(NA, length(names(stock.prices)))
-count = 1
-for (tick in names(stock.prices)) {
-  tickr.first <- diff(stock.prices[,tick], lag = 1, differences = 1)
-  options(warn = -1)
-  adf.tickr <- adf.test(tickr.first, alternative = "stationary", k = 0)
-  p.vals[count] <- adf.tickr$statistic
-  count <- count + 1
-}
-for (adf in 1:length(p.vals)) {
-  if (is.nan(p.vals[adf])) {
-    print("Failed Dickey Fuller for " + names(stock.prices)[adf])
-  }
-}
-
-principal.comps <- pr.out$x[,1:3]
-Cols <- function(vec) {
-  cols <- rainbow(length(unique(vec)))
-  return(cols[as.numeric(as.factor(vec))])
-}
-stocks.labs <- names(stock.prices)
-par(mfrow = c(1,3))
-plot(c(principal.comps[,1],principal.comps[,3]), col = Cols(stocks.labs), pch=19,
-     xlab = "Z1", ylab = "Z3")
-plot(c(principal.comps[,2],principal.comps[,3]), col = Cols(stocks.labs), pch = 19,
-     xlab = "Z2", ylab = "Z3")
-plot(c(principal.comps[,1],principal.comps[,2]), col = Cols(stocks.labs), pch = 19,
-     xlab = "Z1", ylab = "Z2")
-# explain over 83% of variance with 3 principal components
-par(mfrow=c(3,1))
-for (i in 1:3) {
-  plot(principal.comps[,i], col = "darkblue", type = "l")
-}
-Z1 <- diff(Delt(principal.comps[,1], k = 1, type = "arithmetic"), lag = 1, differences = 1)
-Z2 <- diff(Delt(principal.comps[,2], k = 1, type = "arithmetic"), lag = 1, differences = 1)
-Z3 <- diff(Delt(principal.comps[,3], k = 1, type = "arithmetic"), lag = 1, differences = 1)
-plot(Z1, type = "l", col = "darkblue")
-plot(Z2, type = "l", col = "darkblue")
-plot(Z3, type = "l", col = "darkblue")
-
-SVM.signal <- rep(0,length(output$hedge))
-for (i in 1:length(SVM.signal)) {
-  if (i != 490) {
-    if (output$hedge[i] > output$hedge[i+1]) {
-      SVM.signal[i] <- 0
-    }else {
-      SVM.signal[i] <- 1
-    }
-  }
-}
-rsi <- RSI(output$hedge, n = 3)
-sma <- SMA(output$hedge, n = 5)
-
-library(e1071)
-train.svm <- data.frame(SVM.signal, rsi, sma, output$trade.sig)
-svmfit <- svm(train.svm$SVM.signal ~., data = train.svm, kernel = "radial", cost = 10,
-               gamma = 3)
-par(mfrow=c(1,1))
-plot(svmfit, train.svm)
-table(predict = round(predict(svmfit, train.svm)), truth = train.svm$SVM.signal[5:length(train.svm$SVM.signal)])
-224 / (224 + 35)
-199 / (199 + 28)
+returns # 5.028% 2016 returns. Profitable!
