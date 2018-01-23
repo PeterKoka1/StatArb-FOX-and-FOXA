@@ -1,6 +1,7 @@
 setwd("C:/Users/PeterKokalov/lpthw/Pairs-Model-FOX-FOXA")
 library(tseries);library(quantmod)
 df <- read.csv('Joined_Closes.csv')
+length(df$Date)
 date.col <- df['Date']
 dropcols <- c('X','Date')
 all.stocks <- df[, !(names(df) %in% dropcols)]
@@ -13,9 +14,9 @@ for (i in names(stock.prices)) {
   normed.df[, i] <- (eq - min(eq)) / (max(eq) - min(eq))
 }
 par(mfrow=c(1,1))
-plot(stock.prices[,'FOX'], type = "l", col = "darkblue", ylim = c(min(stock.prices[,'FOXA']),40),
+plot(test.data[,'FOX'], type = "l", col = "darkblue", ylim = c(min(test.data[,'FOXA']),35),
      xlab = "2016-2017", ylab = "Closing Prices USD")
-lines(stock.prices[,'FOXA'], type = "l", col = "darkgray")
+lines(test.data[,'FOXA'], type = "l", col = "darkgray")
 legend("topleft", legend=c("FOX", "FOXA"),
        col=c("darkblue","darkgray"), lty=c(1,1), lwd=c(1.5,1.5), cex=0.8)
 
@@ -26,8 +27,8 @@ rets.train <- data.frame(
 )[2:dim(stock.prices)[1],]
 names(rets.train) <- c("FOX", "FOXA")
 par(mfrow=c(2,1))
-plot(rets.train[1:100,"FOX"], type = "l", col = "darkblue", ylab = "FOX Returns", xlab = "write own (2009-12-10)")
-plot(rets.train[1:100,"FOXA"], type = "l", col = "darkblue", ylab = "FOXA Returns", xlab = "write own (2009-12-10)")
+plot(rets.train[1:100,"FOX"], type = "l", col = "darkblue", ylab = "FOX Returns", xlab = "")
+plot(rets.train[1:100,"FOXA"], type = "l", col = "darkblue", ylab = "FOXA Returns", xlab = "100 Indexed Days")
 
 
 ##########################
@@ -77,8 +78,8 @@ rets.stocks <- data.frame(
 )[2:dim(test.data)[1],]
 names(rets.stocks) <- c("FOX","FOXA")
 par(mfrow=c(2,1))
-plot(rets.stocks[1:400,"FOX"], type = "l", col = "darkblue", ylab = "FOX Returns", xlab = "Make own (2016-04-01)")
-plot(rets.stocks[1:400,"FOXA"], type = "l", col = "darkblue", ylab = "FOXA Returns")
+plot(rets.stocks[1:400,"FOX"], type = "l", col = "darkblue", ylab = "FOX Returns", xlab = "")
+plot(rets.stocks[1:400,"FOXA"], type = "l", col = "darkblue", ylab = "FOXA Returns", xlab = "400 Indexed Days")
 
 test.FOX <- diff(rets.stocks$FOX, lag = 1, differences = 1)
 test.FOXA <- diff(rets.stocks$FOXA, lag = 1, differences = 1)
@@ -158,7 +159,7 @@ for (i in 1:length(beta.list)) {
   }
   beta.list[i] <- cur.beta
 }
-plot(beta.list, type = "l", col = "darkblue")
+plot(beta.list, type = "l", col = "darkblue", ylab = "Value of Beta", xlab = "Backtest Period")
 
 resids.add1 <- data.frame(resids);names(resids.add1) <- "resids"
 resids.add2 <- data.frame(resids.1);names(resids.add2) <- "resids"
@@ -180,12 +181,12 @@ trade.sig.update <- (resids.1 - mean.list) / sd.list
 sigma
 
 par(mfrow=c(1,1))
-plot(resids.1[1:50], xlim = c(3,50), type = "l", col = "darkgray", xlab = "(add own) 2016-1-04 50 days", ylab = "Residuals")
+plot(resids.1[1:50], xlim = c(3,50), type = "l", col = "darkgray", xlab = "50 Indexed Days During Backtest", ylab = "Residuals")
 for (i in c(1, -1)) {
   lines(rep(i * sigma, length(resids.1)), col = "darkblue", lty = 2)  
 }
 lines(rep(mu, length(resids.1)), col = "red", lty = 2)
-legend("topright", legend=c("Residuals", "+/- 1.0 Std.Dev", "Mean"),
+legend("topright", legend=c("Residuals", "+/- 1.0 Std.Dev", "Mean = 0.0"),
        col=c("darkgray","darkblue", "red"), lty=c(1,2,2), lwd=c(1,1), cex=0.8)
 
 output$beta <- beta.list
@@ -201,91 +202,22 @@ plot(test.FOX[1:10], type = "l", col = "darkblue", ylim = c(-0.07, 0.07))
 lines(test.FOXA[1:10], type = "l", col = "darkgray")
 abline(a = 0, b = 0, col = "red", lwd = 2, lty = 2)
 
+dim(df)
+(test.data$FOX[492] - test.data$FOX[1]) / test.data$FOX[492]
+test.data$FOX[492]
+plot(df$FOX, type = "l")
+dim(test.data)
+plot(test.data$FOX, type = "l")
+
 cum.rets <- read.csv("Cumulative_Returns.csv")
 par(mfrow=c(1,1))
 dim(cum.rets)
-plot(cum.rets[,2], type = "l", col = "darkblue", ylab = "Returns", xlab = "2Y")
+cum.rets
+plot(cum.rets[,3], type = "l", col = "darkblue", ylab = "Pairs Returns", xlab = "2-Year Backtest")
+plot(output$FOX, type = "l", col = "red")
+plot(cum.rets[,1], type = "l", col = "darkblue", ylab = "Returns", xlab = "2Y")
+plot(output$FOX, type = "l", col = "darkblue", ylab = "FOX Price", xlab = "2Y")
 returns <- (cum.rets$cumRets_1.0[489] - cum.rets$cumRets_1.0[2]) * 100
 returns # 14.28%. Profitable!
-
-#: Can ignore Principal Component Analysis and SVM
-pr.out <- prcomp(stock.prices, scale = TRUE, retx = TRUE)
-pr.var <- pr.out$sdev^2
-PVE <- pr.var / sum(pr.var)
-par(mfrow=c(1,1))
-barplot(PVE[1:12], xlab = "Principal Component", ylab = "Proportion of Variance Explained",
-        col = "darkgray", ylim = c(0,1)) # first 20 PC
-lines(cumsum(PVE[1:12]), col = "darkblue", type = "l", lwd = 1)
-cumsum(PVE)[3]
-
-p.vals <- rep(NA, length(names(stock.prices)))
-count = 1
-for (tick in names(stock.prices)) {
-  tickr.first <- diff(stock.prices[,tick], lag = 1, differences = 1)
-  options(warn = -1)
-  adf.tickr <- adf.test(tickr.first, alternative = "stationary", k = 0)
-  p.vals[count] <- adf.tickr$statistic
-  count <- count + 1
-}
-for (adf in 1:length(p.vals)) {
-  if (is.nan(p.vals[adf])) {
-    print("Failed Dickey Fuller for " + names(stock.prices)[adf])
-  }
-}
-
-principal.comps <- pr.out$x[,1:3]
-Cols <- function(vec) {
-  cols <- rainbow(length(unique(vec)))
-  return(cols[as.numeric(as.factor(vec))])
-}
-stocks.labs <- names(stock.prices)
-par(mfrow = c(1,3))
-plot(c(principal.comps[,1],principal.comps[,3]), col = Cols(stocks.labs), pch=19,
-     xlab = "Z1", ylab = "Z3")
-plot(c(principal.comps[,2],principal.comps[,3]), col = Cols(stocks.labs), pch = 19,
-     xlab = "Z2", ylab = "Z3")
-plot(c(principal.comps[,1],principal.comps[,2]), col = Cols(stocks.labs), pch = 19,
-     xlab = "Z1", ylab = "Z2")
-# explain over 83% of variance with 3 principal components
-par(mfrow=c(3,1))
-for (i in 1:3) {
-  plot(principal.comps[,i], col = "darkblue", type = "l")
-}
-Z1 <- diff(Delt(principal.comps[,1], k = 1, type = "arithmetic"), lag = 1, differences = 1)
-Z2 <- diff(Delt(principal.comps[,2], k = 1, type = "arithmetic"), lag = 1, differences = 1)
-Z3 <- diff(Delt(principal.comps[,3], k = 1, type = "arithmetic"), lag = 1, differences = 1)
-plot(Z1, type = "l", col = "darkblue")
-plot(Z2, type = "l", col = "darkblue")
-plot(Z3, type = "l", col = "darkblue")
-
-names(output)
-dim(stock.prices)
-output$Date
-
-SVM.signal <- rep(0,length(output$hedge))
-for (i in 1:length(SVM.signal)) {
-  if (i != 490) {
-    if (output$hedge[i] > output$hedge[i+1]) {
-      SVM.signal[i] <- 0
-    }else {
-      SVM.signal[i] <- 1
-    }
-  }
-}
-rsi <- RSI(output$trade.sig, n = 3)
-sma <- SMA(output$trade.sig, n = 5)
-
-library(e1071)
-train.svm <- data.frame(SVM.signal, rsi, sma, output$trade.sig, Z1, Z2, Z3)
-names(train.svm)[1] <- sub("as.factor.SVM.signal.", "SVM.signal", names(train.svm)[1])
-svmfit <- svm(as.factor(train.svm$SVM.signal) ~ ., data = train.svm, kernel = "radial", cost = 10,
-              gamma = 3)
-
-library(e1071)
-train.svm <- data.frame(SVM.signal, rsi, sma, output$trade.sig)
-attach(train.svm)
-SVM.signal <- as.factor(SVM.signal)
-tune.out <- tune(svm, SVM.signal ~., data = train.svm, kernel = "linear", ranges = list(cost = c(0.01, 0.1, 1, 10, 100, 1000)))
-summary(tune.out) # cost of 1000 performed best
-tune.out.rad <- tune(svm, SVM.signal ~., data = train.svm, kernel = "radial", ranges = list(cost = c(0.01, 0.1, 1, 10, 100, 100), 
-                                                                                            gamma = c(0.1, 0.5, 1, 5)))
+sharpe(na.remove(cum.rets[,3]), r = 0) # 2.547
+maxdrawdown(na.remove(cum.rets[,3]))$maxdrawdown * 100 # 1.20%
